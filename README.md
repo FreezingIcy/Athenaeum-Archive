@@ -1,1 +1,1 @@
-# -Almanac-Papyrus-Archive
+# Almanac-Papyrus-Archive
