@@ -1,1 +1,598 @@
-test
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14132A">
+<title>Athenaeum · หอเอกสารกลาง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────
+   Athenaeum — design tokens
+   ทิศทาง: ห้องสมุดโบราณตอนกลางคืน · หมึกม่วงเข้ม + ป้ายทองเหลือง
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --ink:      #14132A;   /* พื้นหลัง — หมึกอินดิโก */
+  --ink-2:    #1C1A38;   /* ผิว panel */
+  --ink-3:    #232047;   /* ผิวยกระดับ */
+  --edge:     #322E5C;   /* เส้นขอบ */
+  --vellum:   #EDE9F5;   /* ตัวอักษรหลัก */
+  --muted:    #948DBA;   /* ตัวอักษรรอง */
+  --violet:   #6B60E0;   /* brand action */
+  --violet-d: #534AB7;
+  --brass:    #C9A24B;   /* ป้ายทองเหลือง · สดใหม่ */
+  --verdi:    #4FB3A0;   /* สนิมทองแดง · ok */
+  --rust:     #C8674F;   /* error */
+  --r: 3px;
+  --gut: 18px;
+  --ff-disp: 'Cinzel', 'Times New Roman', serif;
+  --ff-body: 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ff-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ink);
+  color:var(--vellum);
+  font-family:var(--ff-body);
+  font-size:15px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  padding:0 var(--gut) calc(48px + env(safe-area-inset-bottom));
+  max-width:1080px;
+  margin:0 auto;
+}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--brass);outline-offset:2px;border-radius:2px}
+
+/* ── lintel (หัวเรื่องแบบจารึกเหนือประตู) ───────────────────── */
+.lintel{padding:34px 0 0}
+.lintel h1{
+  font-family:var(--ff-disp);
+  font-weight:600;
+  font-size:clamp(26px,7vw,40px);
+  letter-spacing:.26em;
+  text-indent:.26em;
+  margin:0;
+  color:var(--vellum);
+}
+.lintel .sub{
+  font-family:var(--ff-mono);
+  font-size:11px;
+  letter-spacing:.16em;
+  color:var(--muted);
+  text-transform:uppercase;
+  margin-top:6px;
+}
+.lintel .rule{
+  height:1px;
+  background:linear-gradient(90deg,var(--brass),rgba(201,162,75,.15) 60%,transparent);
+  margin:18px 0 0;
+}
+
+/* ── rail (ชั้นวาง: สถานะคลัง + ปุ่ม) ────────────────────────── */
+.rail{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:12px 0 22px;
+}
+.rail .stat{
+  font-family:var(--ff-mono);font-size:11.5px;letter-spacing:.08em;
+  color:var(--muted);margin-right:auto;
+}
+.rail .stat b{color:var(--vellum);font-weight:500}
+
+button{
+  font-family:var(--ff-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;
+  background:transparent;color:var(--muted);
+  border:1px solid var(--edge);border-radius:var(--r);
+  padding:7px 12px;cursor:pointer;
+  transition:border-color .15s,color .15s,background .15s;
+}
+button:hover{color:var(--vellum);border-color:var(--muted)}
+button[disabled]{opacity:.4;cursor:not-allowed}
+button.primary{background:var(--violet-d);border-color:var(--violet);color:#fff}
+button.primary:hover{background:var(--violet)}
+button.danger:hover{color:var(--rust);border-color:var(--rust)}
+
+/* ── shelf (tile grid) ──────────────────────────────────────── */
+.shelf{display:grid;gap:14px;grid-template-columns:1fr}
+@media(min-width:620px){.shelf{grid-template-columns:1fr 1fr}}
+@media(min-width:900px){.shelf{grid-template-columns:1fr 1fr 1fr}}
+
+.tile{
+  position:relative;display:block;
+  background:var(--ink-2);
+  border:1px solid var(--edge);border-radius:var(--r);
+  padding:18px 18px 16px 26px;
+  overflow:hidden;
+  transition:transform .18s ease,border-color .18s,background .18s;
+}
+.tile:hover{background:var(--ink-3);border-color:var(--muted);transform:translateY(-2px)}
+.tile .spine{
+  position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:var(--edge);
+}
+.tile[data-fresh="hot"]  .spine{background:var(--brass);box-shadow:0 0 12px rgba(201,162,75,.45)}
+.tile[data-fresh="warm"] .spine{background:rgba(201,162,75,.55)}
+.tile[data-fresh="cold"] .spine{background:var(--edge)}
+.tile[data-fresh="err"]  .spine{background:var(--rust)}
+
+.plate{
+  font-family:var(--ff-mono);font-size:9.5px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--brass);
+  border-bottom:1px solid rgba(201,162,75,.25);
+  padding-bottom:6px;margin-bottom:12px;
+  display:flex;justify-content:space-between;gap:8px;
+}
+.plate .st{color:var(--muted);letter-spacing:.12em}
+.plate .st[data-s="ok"]{color:var(--verdi)}
+.plate .st[data-s="error"]{color:var(--rust)}
+.plate .st[data-s="warn"]{color:var(--brass)}
+
+.tile h2{
+  font-family:var(--ff-disp);font-weight:500;
+  font-size:21px;letter-spacing:.09em;margin:0 0 4px;
+}
+.tile .desc{font-size:13px;color:var(--muted);margin:0 0 14px;min-height:1.6em}
+.tile .meta{
+  font-family:var(--ff-mono);font-size:11px;letter-spacing:.04em;
+  color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;
+}
+.tile .meta .n{color:var(--vellum);font-size:15px;font-weight:500}
+
+/* socket ว่าง — ประกาศไว้ใน registry แต่ยังไม่มี card */
+.tile.empty{background:transparent;border-style:dashed}
+.tile.empty h2{color:var(--muted)}
+
+/* ── screens (gate / error / empty) ─────────────────────────── */
+.screen{
+  border:1px solid var(--edge);border-radius:var(--r);
+  background:var(--ink-2);padding:28px 22px;text-align:left;
+}
+.screen h2{font-family:var(--ff-disp);font-weight:500;font-size:19px;letter-spacing:.08em;margin:0 0 8px}
+.screen p{color:var(--muted);font-size:13.5px;margin:0 0 6px}
+.screen .acts{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+.screen code{font-family:var(--ff-mono);font-size:12px;color:var(--brass);word-break:break-all}
+
+/* ── registry editor ───────────────────────────────────────── */
+.reg{border:1px solid var(--edge);border-radius:var(--r);background:var(--ink-2);padding:20px;margin-bottom:20px}
+.reg h2{font-family:var(--ff-disp);font-weight:500;font-size:17px;letter-spacing:.1em;margin:0 0 4px}
+.reg .hint{color:var(--muted);font-size:12.5px;margin:0 0 16px}
+.regrow{display:grid;gap:8px;grid-template-columns:1fr;padding:12px 0;border-top:1px solid var(--edge)}
+@media(min-width:700px){.regrow{grid-template-columns:.8fr 1.1fr 1fr 1.3fr auto;align-items:center}}
+.reg input{
+  width:100%;background:var(--ink);color:var(--vellum);
+  border:1px solid var(--edge);border-radius:var(--r);
+  padding:7px 9px;font-family:var(--ff-mono);font-size:12px;
+}
+.reg input:focus{border-color:var(--violet);outline:none}
+.reg label{font-family:var(--ff-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px}
+.reg .acts{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+
+/* ── toast (แทน alert — บทเรียน Papyrus 07-23) ─────────────── */
+.toast{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
+  background:var(--ink-3);border:1px solid var(--edge);border-left:3px solid var(--brass);
+  border-radius:var(--r);padding:11px 16px;font-size:13px;
+  max-width:min(92vw,460px);z-index:50;box-shadow:0 8px 30px rgba(0,0,0,.5);
+}
+.toast[data-t="error"]{border-left-color:var(--rust)}
+.toast[data-t="ok"]{border-left-color:var(--verdi)}
+
+/* ── footer ────────────────────────────────────────────────── */
+.colophon{
+  margin-top:34px;padding-top:14px;border-top:1px solid var(--edge);
+  font-family:var(--ff-mono);font-size:10px;letter-spacing:.1em;
+  color:var(--muted);text-transform:uppercase;
+  display:flex;gap:14px;flex-wrap:wrap;
+}
+.badge{
+  font-family:var(--ff-mono);font-size:9.5px;letter-spacing:.16em;
+  border:1px solid var(--brass);color:var(--brass);
+  padding:2px 7px;border-radius:2px;text-transform:uppercase;
+}
+
+.skel{height:150px;background:var(--ink-2);border:1px solid var(--edge);border-radius:var(--r);
+  animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:.85}}
+
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .tile:hover{transform:none}
+}
+</style>
+</head>
+<body>
+
+<header class="lintel">
+  <h1>ATHENAEUM</h1>
+  <div class="sub">Central Archive · หอเอกสารกลาง</div>
+  <div class="rule"></div>
+</header>
+
+<div class="rail">
+  <div class="stat" id="stat">กำลังเปิดคลัง…</div>
+  <span id="mode-badge"></span>
+  <button id="btn-refresh" hidden>Refresh</button>
+  <button id="btn-registry" hidden>Registry</button>
+  <button id="btn-signout" hidden>Sign out</button>
+</div>
+
+<div id="reg-mount"></div>
+<main id="mount" class="shelf">
+  <div class="skel"></div><div class="skel"></div><div class="skel"></div>
+</main>
+
+<footer class="colophon">
+  <span id="c-app"></span>
+  <span id="c-boot"></span>
+  <span id="c-user"></span>
+</footer>
+
+<!-- ตั้ง flag ก่อนโหลด fb-boot -->
+<script>
+  // window.__FB_EXPECTED_EMAIL = 'YOUR_EMAIL@gmail.com'; // ← เปิดบรรทัดนี้เพื่อเตือนตอน login ผิด account
+  window.__FB_BOOT_LOAD_FAILED = false;
+</script>
+
+<!-- 🔑 canonical fb-boot (§1.4) — root-site layout ตาม §6.1
+     ถ้าเลือก subfolder ให้เปลี่ยน src เป็น /Almanac-Papyrus-Archive/fb-boot.js -->
+<script type="module" src="/fb-boot.js"
+        onerror="window.__FB_BOOT_LOAD_FAILED=true;window.dispatchEvent(new CustomEvent('fb-boot-missing'))"></script>
+
+<script type="module">
+/* ═══════════════════════════════════════════════════════════════
+   Athenaeum portal
+   หน้าที่มีแค่ 3 อย่าง (§6.3): login/logout · tile จาก _registry · สถานะย่อจาก card
+   ห้ามอ่าน data ของ plugin เด็ดขาด — อ่านได้แค่ apps/<name>/meta/card
+   ═══════════════════════════════════════════════════════════════ */
+
+const APP_VER  = '2026.07.26.A';
+const BOOT_REQ = '2026.07.26.A';   // fb-boot version ที่ portal นี้คาด
+const BOOT_TIMEOUT_MS = 9000;
+
+const $ = (id) => document.getElementById(id);
+const mount   = $('mount');
+const regMount= $('reg-mount');
+
+let FB = null;          // API จาก fb-boot
+let plugins = [];       // registry rows + _card
+let demo = false;
+let settled = false;
+
+$('c-app').textContent = 'portal ' + APP_VER;
+
+/* ── utils ─────────────────────────────────────────────────── */
+
+const esc = (s) => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+function relTH(v){
+  if(!v) return 'ยังไม่เคยอัปเดต';
+  const d = (v && typeof v.toDate === 'function') ? v.toDate() : new Date(v);
+  if(isNaN(d.getTime())) return String(v);
+  const ms = Date.now() - d.getTime();
+  if(ms < 0) return 'อนาคต?';
+  const min = Math.round(ms/60000);
+  if(min < 1)  return 'เมื่อครู่';
+  if(min < 60) return min + ' นาทีที่แล้ว';
+  const hr = Math.round(min/60);
+  if(hr < 24)  return hr + ' ชม.ที่แล้ว';
+  const day = Math.floor(ms/86400000);
+  if(day === 1) return 'เมื่อวาน';
+  if(day < 30)  return day + ' วันที่แล้ว';
+  return d.toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'});
+}
+
+function freshness(card, err){
+  if(err) return 'err';
+  if(!card || !card.updated) return 'cold';
+  const d = (card.updated && card.updated.toDate) ? card.updated.toDate() : new Date(card.updated);
+  if(isNaN(d.getTime())) return 'cold';
+  const h = (Date.now() - d.getTime())/3600000;
+  if(h <= 36)  return 'hot';
+  if(h <= 168) return 'warm';
+  return 'cold';
+}
+
+let toastT = null;
+function toast(msg, kind){
+  clearTimeout(toastT);
+  document.querySelectorAll('.toast').forEach(n => n.remove());
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.setAttribute('data-t', kind || 'info');
+  el.setAttribute('role','status');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  toastT = setTimeout(() => el.remove(), 4200);
+}
+
+function screen(title, lines, actions){
+  mount.style.gridTemplateColumns = '1fr';
+  mount.innerHTML =
+    '<div class="screen"><h2>' + esc(title) + '</h2>' +
+    lines.map(l => '<p>' + l + '</p>').join('') +
+    '<div class="acts"></div></div>';
+  const box = mount.querySelector('.acts');
+  (actions || []).forEach(a => {
+    const b = document.createElement('button');
+    b.textContent = a.label;
+    if(a.primary) b.className = 'primary';
+    b.addEventListener('click', a.on);
+    box.appendChild(b);
+  });
+}
+
+function setChrome(signedIn){
+  $('btn-refresh').hidden  = !signedIn;
+  $('btn-registry').hidden = !signedIn;
+  $('btn-signout').hidden  = !signedIn || demo;
+}
+
+/* ── boot wiring ───────────────────────────────────────────── */
+
+window.addEventListener('fb-ready', (e) => {
+  settled = true;
+  FB = window.__FB;
+  try { FB.assertVer(BOOT_REQ); }
+  catch(err){ toast(err.message, 'error'); }
+  $('c-boot').textContent = 'fb-boot ' + (window.__FB_BOOT_VER || '?');
+  $('c-user').textContent = (e.detail.user && e.detail.user.email) || '';
+  setChrome(true);
+  load();
+});
+
+window.addEventListener('fb-auth-required', (e) => {
+  settled = true;
+  setChrome(false);
+  const err = e.detail && e.detail.error;
+  screen('ต้อง sign in ก่อน', [
+    'คลังนี้เปิดให้บัญชีเดียว — Firestore Rules ปักหมุดที่ email',
+    err ? '<code>' + esc(err.message || String(err)) + '</code>' : 'กดปุ่มด้านล่างเพื่อเข้าสู่ระบบด้วย Google'
+  ], [
+    { label:'Sign in with Google', primary:true, on: () => window.FB_SIGN_IN && window.FB_SIGN_IN() }
+  ]);
+});
+
+window.addEventListener('fb-signed-out', () => {
+  settled = true;
+  FB = null; setChrome(false);
+  $('c-user').textContent = '';
+  screen('ออกจากระบบแล้ว', ['session ถูกล้างแล้ว · sign in ใหม่เพื่อเปิดคลังอีกครั้ง'], [
+    { label:'Sign in with Google', primary:true, on: () => window.FB_SIGN_IN && window.FB_SIGN_IN() }
+  ]);
+});
+
+window.addEventListener('fb-boot-missing', bootFailed);
+setTimeout(() => { if(!settled) bootFailed(); }, BOOT_TIMEOUT_MS);
+
+function bootFailed(){
+  if(settled) return;
+  settled = true;
+  setChrome(false);
+  screen('ต่อ fb-boot.js ไม่ได้', [
+    'portal โหลด <code>/fb-boot.js</code> ไม่สำเร็จ — เช็ค 3 อย่าง:',
+    '1 · ไฟล์ <code>fb-boot.js</code> อยู่ที่ root ของ repo portal จริงหรือไม่',
+    '2 · เปิดหน้านี้ผ่าน http(s) ไม่ใช่ <code>file://</code> (ES module ต้องมี origin)',
+    '3 · path ใน <code>&lt;script src&gt;</code> ตรงกับ layout ที่เลือกไว้ (§6.1 root-site vs subfolder)'
+  ], [
+    { label:'Reload', on: () => location.reload() },
+    { label:'Preview with demo data', primary:true, on: startDemo }
+  ]);
+}
+
+/* ── demo mode (ตรวจ layout โดยไม่ต้องมี Firebase) ──────────── */
+
+function startDemo(){
+  demo = true;
+  plugins = [
+    { name:'papyrus', url:'./papyrus/', title:'Papyrus', desc:'คลังรายงานตลาดรายวัน JANUS',
+      _card:{ title:'Papyrus', count:47, updated:new Date(Date.now()-2*3600e3).toISOString(), status:'ok' } },
+    { name:'almanac', url:'./almanac/', title:'Almanac', desc:'บทความและบันทึกประจำวัน', _card:null },
+    { name:'compendium', url:'./compendium/', title:'Compendium', desc:'รวม manual ทุกระบบ',
+      _card:{ title:'Compendium', count:6, updated:new Date(Date.now()-9*86400e3).toISOString(), status:'ok' } }
+  ];
+  $('mode-badge').innerHTML = '<span class="badge">demo</span>';
+  setChrome(true);
+  render();
+  toast('demo mode — ข้อมูลสมมติ ไม่ได้ต่อ Firestore', 'info');
+}
+
+/* ── load: 1 read (_registry) + N reads (card) ─────────────── */
+
+async function load(){
+  if(demo) return render();
+  mount.style.gridTemplateColumns = '';
+  mount.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  $('stat').textContent = 'กำลังอ่าน registry…';
+
+  let rows = [];
+  try {
+    const snap = await FB.getDoc(FB.doc(FB.db, 'apps', '_registry'));
+    rows = snap.exists() && Array.isArray(snap.data().plugins) ? snap.data().plugins : [];
+  } catch(err){
+    setChrome(true);
+    return screen('อ่าน registry ไม่ได้', [
+      'ที่ <code>apps/_registry</code> — สาเหตุที่เจอบ่อยคือ Firestore Rules ยังไม่ publish หรือ email ไม่ตรง',
+      '<code>' + esc(err.message || String(err)) + '</code>'
+    ], [{ label:'Retry', primary:true, on: load }]);
+  }
+
+  if(!rows.length){
+    setChrome(true);
+    return screen('คลังยังว่าง', [
+      '<code>apps/_registry</code> ยังไม่มี plugin — seed row แรกเพื่อเริ่มใช้งาน',
+      'หรือกด Registry เพื่อกรอกเอง'
+    ], [
+      { label:'Seed papyrus row', primary:true, on: seedPapyrus },
+      { label:'Open registry', on: openRegistry }
+    ]);
+  }
+
+  plugins = rows.map(r => Object.assign({}, r));
+  await Promise.all(plugins.map(async (p) => {
+    if(!p.name){ p._err = 'row ไม่มี field name'; return; }
+    try {
+      const s = await FB.getDoc(FB.doc(FB.db, 'apps', p.name, 'meta', 'card'));
+      p._card = s.exists() ? s.data() : null;
+    } catch(err){ p._err = err.message || String(err); }
+  }));
+  render();
+}
+
+async function seedPapyrus(){
+  try{
+    await FB.setDoc(FB.doc(FB.db, 'apps', '_registry'), {
+      plugins: [{ name:'papyrus', url:'/papyrus/', title:'Papyrus', desc:'คลังรายงานตลาดรายวัน JANUS' }],
+      updated: new Date().toISOString()
+    });
+    toast('seed registry แล้ว', 'ok');
+    load();
+  } catch(err){ toast('seed ไม่สำเร็จ · ' + (err.message||err), 'error'); }
+}
+
+/* ── render ────────────────────────────────────────────────── */
+
+function render(){
+  mount.style.gridTemplateColumns = '';
+  const withCard = plugins.filter(p => p._card).length;
+  $('stat').innerHTML =
+    '<b>' + plugins.length + '</b> plugins · <b>' + withCard + '</b> มีข้อมูล · ' +
+    'อ่าน ' + (1 + plugins.length) + ' docs/เปิดหน้า';
+
+  mount.innerHTML = plugins.map(tile).join('');
+}
+
+function tile(p){
+  const c = p._card || null;
+  const f = freshness(c, p._err);
+  const url = p.url || '#';
+  const title = (c && c.title) || p.title || p.name || '—';
+  const sigil = String(p.name || '?').toUpperCase();
+  const status = p._err ? 'error' : (c && c.status) || '';
+
+  let meta;
+  if(p._err){
+    meta = '<span>อ่าน card ไม่ได้ · ' + esc(p._err) + '</span>';
+  } else if(!c){
+    meta = '<span>ยังไม่มี card — plugin ยังไม่เคยเขียนข้อมูล</span>';
+  } else {
+    const n = (typeof c.count === 'number') ? c.count : '—';
+    meta = '<span class="n">' + esc(n) + '</span><span>รายการ</span>' +
+           '<span>·</span><span>' + esc(relTH(c.updated)) + '</span>';
+  }
+
+  return '' +
+  '<a class="tile' + (c ? '' : ' empty') + '" data-fresh="' + f + '" href="' + esc(url) + '">' +
+    '<span class="spine"></span>' +
+    '<div class="plate"><span>APP · ' + esc(sigil) + '</span>' +
+      (status ? '<span class="st" data-s="' + esc(status) + '">' + esc(status) + '</span>' : '') +
+    '</div>' +
+    '<h2>' + esc(title) + '</h2>' +
+    '<p class="desc">' + esc(p.desc || '') + '</p>' +
+    '<div class="meta">' + meta + '</div>' +
+  '</a>';
+}
+
+/* ── registry editor (registry เป็นข้อมูลของ portal เอง) ────── */
+
+let regRows = null;
+
+function openRegistry(){
+  regRows = plugins.map(p => ({ name:p.name||'', url:p.url||'', title:p.title||'', desc:p.desc||'' }));
+  drawRegistry();
+  regMount.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function drawRegistry(){
+  regMount.innerHTML =
+    '<section class="reg"><h2>REGISTRY</h2>' +
+    '<p class="hint">socket list ที่ <code>apps/_registry</code> — เพิ่ม 1 row = เห็น tile ใหม่ ไม่ต้องแก้โค้ด portal · ' +
+    '<code>name</code> ต้องตรงกับ namespace <code>apps/&lt;name&gt;/</code> ของ plugin</p>' +
+    '<div id="reg-rows"></div>' +
+    '<div class="acts">' +
+      '<button id="reg-add">Add row</button>' +
+      '<button id="reg-save" class="primary">Save</button>' +
+      '<button id="reg-cancel">Cancel</button>' +
+    '</div></section>';
+
+  const box = document.getElementById('reg-rows');
+  regRows.forEach((r, i) => {
+    const div = document.createElement('div');
+    div.className = 'regrow';
+    div.innerHTML =
+      field('name',  'name',  r.name,  i) +
+      field('url',   'url',   r.url,   i) +
+      field('title', 'title', r.title, i) +
+      field('desc',  'desc',  r.desc,  i) +
+      '<div><label>&nbsp;</label><button class="danger" data-rm="' + i + '">Remove</button></div>';
+    box.appendChild(div);
+  });
+
+  box.addEventListener('input', (e) => {
+    const t = e.target;
+    if(t.dataset && t.dataset.k) regRows[+t.dataset.i][t.dataset.k] = t.value;
+  });
+  box.addEventListener('click', (e) => {
+    const rm = e.target.dataset && e.target.dataset.rm;
+    if(rm == null) return;
+    regRows.splice(+rm, 1);
+    drawRegistry();
+  });
+
+  document.getElementById('reg-add').onclick = () => {
+    regRows.push({ name:'', url:'', title:'', desc:'' });
+    drawRegistry();
+  };
+  document.getElementById('reg-cancel').onclick = closeRegistry;
+  document.getElementById('reg-save').onclick = saveRegistry;
+}
+
+function field(label, key, val, i){
+  return '<div><label>' + label + '</label>' +
+    '<input data-k="' + key + '" data-i="' + i + '" value="' + esc(val) + '"></div>';
+}
+
+function closeRegistry(){ regMount.innerHTML = ''; regRows = null; }
+
+async function saveRegistry(){
+  const clean = regRows
+    .map(r => ({ name:r.name.trim(), url:r.url.trim(), title:r.title.trim(), desc:r.desc.trim() }))
+    .filter(r => r.name);
+
+  const dupes = clean.map(r => r.name).filter((n,i,a) => a.indexOf(n) !== i);
+  if(dupes.length) return toast('name ซ้ำ: ' + dupes.join(', '), 'error');
+  if(clean.some(r => !r.url)) return toast('ทุก row ต้องมี url', 'error');
+
+  if(demo){
+    plugins = clean.map(r => Object.assign({ _card:null }, r));
+    closeRegistry(); render();
+    return toast('demo mode — ไม่ได้เขียนลง Firestore', 'info');
+  }
+
+  try{
+    await FB.setDoc(FB.doc(FB.db, 'apps', '_registry'), {
+      plugins: clean,
+      updated: new Date().toISOString()
+    });
+    closeRegistry();
+    toast('บันทึก registry แล้ว', 'ok');
+    load();
+  } catch(err){
+    toast('บันทึกไม่สำเร็จ · ' + (err.message||err), 'error');
+  }
+}
+
+/* ── chrome buttons ────────────────────────────────────────── */
+
+$('btn-refresh').onclick  = () => { if(demo){ render(); toast('demo mode', 'info'); } else load(); };
+$('btn-registry').onclick = () => { regRows ? closeRegistry() : openRegistry(); };
+$('btn-signout').onclick  = () => { if(window.FB_SIGN_OUT) window.FB_SIGN_OUT(); };
+</script>
+</body>
+</html>
