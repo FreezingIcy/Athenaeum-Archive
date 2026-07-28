@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#14132A">
+<meta name="theme-color" content="#17152A" id="theme-color-meta">
 <title>Athenaeum · หอเอกสารกลาง</title>
+<script>
+/* กัน FOUC — ตั้ง data-mode บน <html> ก่อน CSS จะ paint
+   ต้องเป็น script ธรรมดา (ไม่ใช่ module) วางก่อน <style> เสมอ */
+(function () {
+  var m = null;
+  try { m = localStorage.getItem('athenaeum:mode'); } catch (e) { /* private mode */ }
+  if (m !== 'light' && m !== 'dark') {
+    m = (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+  }
+  document.documentElement.setAttribute('data-mode', m);
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
@@ -14,15 +26,21 @@
    ทิศทาง: ห้องสมุดโบราณตอนกลางคืน · หมึกม่วงเข้ม + ป้ายทองเหลือง
    ───────────────────────────────────────────────────────────── */
 :root{
-  --ink:      #14132A;   /* พื้นหลัง — หมึกอินดิโก */
-  --ink-2:    #1C1A38;   /* ผิว panel */
-  --ink-3:    #232047;   /* ผิวยกระดับ */
-  --edge:     #322E5C;   /* เส้นขอบ */
+  /* AMETHYST — REGIA × HELIOTROPE ผสม (เลือกใช้ 2026-07-27)
+     dark เป็นค่าเริ่มต้น/fallback ก่อน JS ตั้ง data-mode */
+  --ink:      #17152A;   /* พื้นหลัง — หมึกอินดิโกม่วง */
+  --ink-2:    #201D34;   /* ผิว panel */
+  --ink-3:    #272343;   /* ผิวยกระดับ */
+  --edge:     #383257;   /* เส้นขอบ */
   --vellum:   #EDE9F5;   /* ตัวอักษรหลัก */
-  --muted:    #948DBA;   /* ตัวอักษรรอง */
-  --violet:   #6B60E0;   /* brand action */
-  --violet-d: #534AB7;
+  --muted:    #9A91B7;   /* ตัวอักษรรอง */
+  --violet:   #836FD2;   /* brand action */
+  --violet-d: #6858A6;
   --brass:    #C9A24B;   /* ป้ายทองเหลือง · สดใหม่ */
+  --brass-15: rgba(201,162,75,.15);
+  --brass-25: rgba(201,162,75,.25);
+  --brass-45: rgba(201,162,75,.45);
+  --brass-55: rgba(201,162,75,.55);
   --verdi:    #4FB3A0;   /* สนิมทองแดง · ok */
   --rust:     #C8674F;   /* error */
   --r: 3px;
@@ -31,8 +49,27 @@
   --ff-body: 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --ff-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 }
+html[data-mode="light"]{
+  --ink:      #F4F2FA;
+  --ink-2:    #FFFFFF;
+  --ink-3:    #F1EDF7;
+  --edge:     #DBD5EA;
+  --vellum:   #201C32;
+  --muted:    #695F8C;
+  --violet:   #6856AF;
+  --violet-d: #55488F;
+  --brass:    #8A6A1F;   /* เข้มลงจาก dark — #C9A24B บนพื้นขาว contrast ไม่พอ */
+  --brass-15: rgba(138,106,31,.15);
+  --brass-25: rgba(138,106,31,.25);
+  --brass-45: rgba(138,106,31,.45);
+  --brass-55: rgba(138,106,31,.55);
+  --verdi:    #2E7D6C;
+  --rust:     #B84F39;
+}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
+body{transition:background .25s ease,color .25s ease}
+@media(prefers-reduced-motion:reduce){body{transition:none}}
 body{
   background:var(--ink);
   color:var(--vellum);
@@ -46,6 +83,33 @@ body{
 }
 a{color:inherit;text-decoration:none}
 :focus-visible{outline:2px solid var(--brass);outline-offset:2px;border-radius:2px}
+
+/* ── mode toggle (มุมขวาบน) ───────────────────────────────────
+   จันทร์เสี้ยว → พระอาทิตย์เต็มดวง — สัญลักษณ์เดียวที่เปลี่ยนสถานะ
+   ไม่ใช่ไอคอน 2 ตัวสลับกัน (บทเรียน Papyrus 07-23: ผูก id ตรง ไม่ delegate) */
+.modebtn{
+  position:fixed;top:14px;right:14px;z-index:40;
+  width:34px;height:34px;
+  display:block;
+  background:rgba(0,0,0,0);color:inherit;cursor:pointer;
+  border:1px solid var(--edge);border-radius:9px;
+  transition:border-color .2s,background .2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.modebtn:hover{border-color:var(--muted)}
+.modebtn{background:var(--ink);backdrop-filter:blur(6px)}
+@supports (background:color-mix(in srgb, red 50%, transparent)){
+  .modebtn{background:color-mix(in srgb, var(--ink) 82%, transparent)}
+}
+.modebtn svg{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  opacity:0;transition:opacity .18s ease;
+}
+/* destination convention: ไอคอนบอกโหมดที่จะ "กดแล้วได้" ไม่ใช่โหมดปัจจุบัน
+   dark ตอนนี้ → โชว์ Sun (กดแล้วได้สว่าง) · light ตอนนี้ → โชว์ Moon (กดแล้วได้มืด) */
+html[data-mode="dark"]  .modebtn .icon-sun{opacity:1}
+html[data-mode="light"] .modebtn .icon-moon{opacity:1}
+@media(prefers-reduced-motion:reduce){.modebtn svg{transition:none}}
 
 /* ── lintel (หัวเรื่องแบบจารึกเหนือประตู) ───────────────────── */
 .lintel{padding:34px 0 0}
@@ -68,7 +132,7 @@ a{color:inherit;text-decoration:none}
 }
 .lintel .rule{
   height:1px;
-  background:linear-gradient(90deg,var(--brass),rgba(201,162,75,.15) 60%,transparent);
+  background:linear-gradient(90deg,var(--brass),var(--brass-15) 60%,transparent);
   margin:18px 0 0;
 }
 
@@ -115,15 +179,15 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
   position:absolute;left:0;top:0;bottom:0;width:4px;
   background:var(--edge);
 }
-.tile[data-fresh="hot"]  .spine{background:var(--brass);box-shadow:0 0 12px rgba(201,162,75,.45)}
-.tile[data-fresh="warm"] .spine{background:rgba(201,162,75,.55)}
+.tile[data-fresh="hot"]  .spine{background:var(--brass);box-shadow:0 0 12px var(--brass-45)}
+.tile[data-fresh="warm"] .spine{background:var(--brass-55)}
 .tile[data-fresh="cold"] .spine{background:var(--edge)}
 .tile[data-fresh="err"]  .spine{background:var(--rust)}
 
 .plate{
   font-family:var(--ff-mono);font-size:9.5px;letter-spacing:.2em;
   text-transform:uppercase;color:var(--brass);
-  border-bottom:1px solid rgba(201,162,75,.25);
+  border-bottom:1px solid var(--brass-25);
   padding-bottom:6px;margin-bottom:12px;
   display:flex;justify-content:space-between;gap:8px;
 }
@@ -207,6 +271,19 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
 </head>
 <body>
 
+<button class="modebtn" id="btn-mode" type="button" aria-pressed="false" title="สลับโหมดสว่าง / มืด">
+  <span class="sr" hidden>สลับโหมดสว่างมืด</span>
+  <svg class="icon-sun" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"
+       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="4"/>
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+  </svg>
+  <svg class="icon-moon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"
+       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/>
+  </svg>
+</button>
+
 <header class="lintel">
   <h1>ATHENAEUM</h1>
   <div class="sub">Central Archive · หอเอกสารกลาง</div>
@@ -238,9 +315,35 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
   window.__FB_BOOT_LOAD_FAILED = false;
 </script>
 
-<!-- 🔑 canonical fb-boot (§1.4) — root-site layout ตาม §6.1
-     ถ้าเลือก subfolder ให้เปลี่ยน src เป็น /Almanac-Papyrus-Archive/fb-boot.js -->
-<script type="module" src="/fb-boot.js"
+<!-- mode toggle — ทำงานเองทันที ไม่ขึ้นกับ Firebase/fb-boot -->
+<script>
+(function () {
+  var KEY = 'athenaeum:mode';
+  var btn = document.getElementById('btn-mode');
+  var themeMeta = document.getElementById('theme-color-meta');
+  var THEME = { dark: '#17152A', light: '#F4F2FA' };
+
+  function apply(mode, persist) {
+    document.documentElement.setAttribute('data-mode', mode);
+    btn.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
+    btn.setAttribute('title', mode === 'light' ? 'สลับเป็นโหมดมืด' : 'สลับเป็นโหมดสว่าง');
+    if (themeMeta) themeMeta.setAttribute('content', THEME[mode]);
+    if (persist) { try { localStorage.setItem(KEY, mode); } catch (e) { /* private mode */ } }
+  }
+
+  // sync ปุ่มกับ attribute ที่ script กัน-FOUC ตั้งไว้แล้วใน <head>
+  apply(document.documentElement.getAttribute('data-mode') || 'dark', false);
+
+  btn.addEventListener('click', function () {
+    var next = document.documentElement.getAttribute('data-mode') === 'dark' ? 'light' : 'dark';
+    apply(next, true);
+  });
+})();
+</script>
+
+<!-- 🔑 canonical fb-boot (§1.4) — subfolder layout: repo = Athenaeum-Archive-Portal
+     ถ้าย้ายเป็น root-site ในอนาคต เปลี่ยน src กลับเป็น /fb-boot.js -->
+<script type="module" src="/Athenaeum-Archive-Portal/fb-boot.js"
         onerror="window.__FB_BOOT_LOAD_FAILED=true;window.dispatchEvent(new CustomEvent('fb-boot-missing'))"></script>
 
 <script type="module">
@@ -250,8 +353,8 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
    ห้ามอ่าน data ของ plugin เด็ดขาด — อ่านได้แค่ apps/<name>/meta/card
    ═══════════════════════════════════════════════════════════════ */
 
-const APP_VER  = '2026.07.26.A';
-const BOOT_REQ = '2026.07.26.A';   // fb-boot version ที่ portal นี้คาด
+const APP_VER  = '2026.07.27.A';   // AMETHYST palette + dark/light toggle
+const BOOT_REQ = '2026.07.27.B';   // fb-boot version ที่ portal นี้คาด
 const BOOT_TIMEOUT_MS = 9000;
 
 const $ = (id) => document.getElementById(id);
@@ -259,11 +362,20 @@ const mount   = $('mount');
 const regMount= $('reg-mount');
 
 let FB = null;          // API จาก fb-boot
+let uid = null;         // uid ของ user ที่ login (ตั้งตอน fb-ready) — ทุก path ขึ้นต้นด้วยตัวนี้
 let plugins = [];       // registry rows + _card
 let demo = false;
 let settled = false;
 
 $('c-app').textContent = 'portal ' + APP_VER;
+
+/* helper — ทุก doc ของ portal อยู่ใต้ users/<uid>/apps/...
+   รวม prefix ไว้ที่เดียว เผลอลืม uid ไม่ได้ · ถ้า uid ยังไม่มี = โยน error ชัด ๆ
+   ดีกว่าปล่อยให้ path เพี้ยนเงียบ ๆ */
+function appDoc(){
+  if(!uid) throw new Error('appDoc ถูกเรียกก่อน login (uid ยังว่าง)');
+  return FB.doc(FB.db, 'users', uid, 'apps', ...arguments);
+}
 
 /* ── utils ─────────────────────────────────────────────────── */
 
@@ -339,10 +451,14 @@ function setChrome(signedIn){
 window.addEventListener('fb-ready', (e) => {
   settled = true;
   FB = window.__FB;
+  uid = (e.detail.user && e.detail.user.uid) || (FB.user && FB.user.uid) || null;
   try { FB.assertVer(BOOT_REQ); }
   catch(err){ toast(err.message, 'error'); }
   $('c-boot').textContent = 'fb-boot ' + (window.__FB_BOOT_VER || '?');
   $('c-user').textContent = (e.detail.user && e.detail.user.email) || '';
+  if(!uid){ return screen('อ่าน uid ไม่ได้', ['login สำเร็จแต่ไม่มี uid — ลอง sign out แล้วเข้าใหม่'], [
+    { label:'Sign out', on: () => window.FB_SIGN_OUT && window.FB_SIGN_OUT() }
+  ]); }
   setChrome(true);
   load();
 });
@@ -352,7 +468,7 @@ window.addEventListener('fb-auth-required', (e) => {
   setChrome(false);
   const err = e.detail && e.detail.error;
   screen('ต้อง sign in ก่อน', [
-    'คลังนี้เปิดให้บัญชีเดียว — Firestore Rules ปักหมุดที่ email',
+    'sign in ด้วย Google เพื่อเข้าคลังของคุณ — แต่ละบัญชีมีคลังแยกของตัวเอง',
     err ? '<code>' + esc(err.message || String(err)) + '</code>' : 'กดปุ่มด้านล่างเพื่อเข้าสู่ระบบด้วย Google'
   ], [
     { label:'Sign in with Google', primary:true, on: () => window.FB_SIGN_IN && window.FB_SIGN_IN() }
@@ -413,7 +529,7 @@ async function load(){
 
   let rows = [];
   try {
-    const snap = await FB.getDoc(FB.doc(FB.db, 'apps', '_registry'));
+    const snap = await FB.getDoc(appDoc('_registry'));
     rows = snap.exists() && Array.isArray(snap.data().plugins) ? snap.data().plugins : [];
   } catch(err){
     setChrome(true);
@@ -438,7 +554,7 @@ async function load(){
   await Promise.all(plugins.map(async (p) => {
     if(!p.name){ p._err = 'row ไม่มี field name'; return; }
     try {
-      const s = await FB.getDoc(FB.doc(FB.db, 'apps', p.name, 'meta', 'card'));
+      const s = await FB.getDoc(appDoc(p.name, 'meta', 'card'));
       p._card = s.exists() ? s.data() : null;
     } catch(err){ p._err = err.message || String(err); }
   }));
@@ -447,7 +563,7 @@ async function load(){
 
 async function seedPapyrus(){
   try{
-    await FB.setDoc(FB.doc(FB.db, 'apps', '_registry'), {
+    await FB.setDoc(appDoc('_registry'), {
       plugins: [{ name:'papyrus', url:'/papyrus/', title:'Papyrus', desc:'คลังรายงานตลาดรายวัน JANUS' }],
       updated: new Date().toISOString()
     });
@@ -576,7 +692,7 @@ async function saveRegistry(){
   }
 
   try{
-    await FB.setDoc(FB.doc(FB.db, 'apps', '_registry'), {
+    await FB.setDoc(appDoc('_registry'), {
       plugins: clean,
       updated: new Date().toISOString()
     });
