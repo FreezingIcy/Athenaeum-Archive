@@ -491,11 +491,16 @@ function bootFailed(){
   if(settled) return;
   settled = true;
   setChrome(false);
+  // อ่าน path จริงจาก script tag — อย่าฮาร์ดโค้ด ไม่งั้นข้อความหลอกตัวเอง
+  let src = '(หา script tag ไม่เจอ)';
+  try {
+    const tag = document.querySelector('script[src*="fb-boot.js"]');
+    if(tag) src = tag.getAttribute('src') + '  →  ' + tag.src;
+  } catch(e){ /* noop */ }
   screen('ต่อ fb-boot.js ไม่ได้', [
-    'portal โหลด <code>/fb-boot.js</code> ไม่สำเร็จ — เช็ค 3 อย่าง:',
-    '1 · ไฟล์ <code>fb-boot.js</code> อยู่ที่ root ของ repo portal จริงหรือไม่',
-    '2 · เปิดหน้านี้ผ่าน http(s) ไม่ใช่ <code>file://</code> (ES module ต้องมี origin)',
-    '3 · path ใน <code>&lt;script src&gt;</code> ตรงกับ layout ที่เลือกไว้ (§6.1 root-site vs subfolder)'
+    'portal พยายามโหลด: <code>' + esc(src) + '</code>',
+    'เปิด URL เต็มด้านบนในแท็บใหม่ — ถ้าเป็น <b>404</b> แปลว่าไฟล์ยังไม่อยู่ใน repo หรือ GitHub Pages ยัง deploy ไม่เสร็จ',
+    'ถ้าเห็นซอร์สโค้ดปกติ แต่ยังขึ้นกล่องนี้ = ไฟล์โหลดได้แต่ error ตอนรัน → เปิด F12 → Console ดูข้อความจริง'
   ], [
     { label:'Reload', on: () => location.reload() },
     { label:'Preview with demo data', primary:true, on: startDemo }
