@@ -7,7 +7,7 @@
 <title>Athenaeum · หอเอกสารกลาง</title>
 <script>
 /* กัน FOUC — ตั้ง data-mode บน <html> ก่อน CSS จะ paint
-   ต้องเป็น script ธรรมดา (ไม่ใช่ module) วางก่อน <style> เสมอ */
+   ต้องเป็น script ธรรมดา (ไม่ใช่ module) วางก่อน style block เสมอ */
 (function () {
   var m = null;
   try { m = localStorage.getItem('athenaeum:mode'); } catch (e) { /* private mode */ }
@@ -272,7 +272,6 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
 <body>
 
 <button class="modebtn" id="btn-mode" type="button" aria-pressed="false" title="สลับโหมดสว่าง / มืด">
-  <span class="sr" hidden>สลับโหมดสว่างมืด</span>
   <svg class="icon-sun" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"
        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="4"/>
@@ -309,12 +308,6 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
   <span id="c-user"></span>
 </footer>
 
-<!-- ตั้ง flag ก่อนโหลด fb-boot -->
-<script>
-  // window.__FB_EXPECTED_EMAIL = 'YOUR_EMAIL@gmail.com'; // ← เปิดบรรทัดนี้เพื่อเตือนตอน login ผิด account
-  window.__FB_BOOT_LOAD_FAILED = false;
-</script>
-
 <!-- mode toggle — ทำงานเองทันที ไม่ขึ้นกับ Firebase/fb-boot -->
 <script>
 (function () {
@@ -341,20 +334,20 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
 })();
 </script>
 
-<!-- 🔑 canonical fb-boot (§1.4) — subfolder layout: repo = Athenaeum-Archive-Portal
-     ถ้าย้ายเป็น root-site ในอนาคต เปลี่ยน src กลับเป็น /fb-boot.js -->
-<script type="module" src="/Athenaeum-Archive-Portal/fb-boot.js"
-        onerror="window.__FB_BOOT_LOAD_FAILED=true;window.dispatchEvent(new CustomEvent('fb-boot-missing'))"></script>
+<!-- 🔑 canonical fb-boot (§1.4) — subfolder layout: repo = Athenaeum-Archive
+     ถ้าเปลี่ยนชื่อ repo อีก ต้องแก้บรรทัดนี้ให้ตรงเสมอ -->
+<script type="module" src="/Athenaeum-Archive/fb-boot.js"
+        onerror="window.dispatchEvent(new CustomEvent('fb-boot-missing'))"></script>
 
 <script type="module">
 /* ═══════════════════════════════════════════════════════════════
    Athenaeum portal
    หน้าที่มีแค่ 3 อย่าง (§6.3): login/logout · tile จาก _registry · สถานะย่อจาก card
-   ห้ามอ่าน data ของ plugin เด็ดขาด — อ่านได้แค่ apps/<name>/meta/card
+   ห้ามอ่าน data ของ plugin เด็ดขาด — อ่านได้แค่ users/<uid>/apps/<name>/meta/card
    ═══════════════════════════════════════════════════════════════ */
 
-const APP_VER  = '2026.07.27.A';   // AMETHYST palette + dark/light toggle
-const BOOT_REQ = '2026.07.27.B';   // fb-boot version ที่ portal นี้คาด
+const APP_VER  = '2026.07.28.A';   // multi-user (users/<uid>/apps/) + safeUrl + boot-race recovery
+const BOOT_REQ = '2026.07.27.C';   // fb-boot version ที่ portal นี้คาด
 const BOOT_TIMEOUT_MS = 9000;
 
 const $ = (id) => document.getElementById(id);
@@ -382,6 +375,17 @@ function appDoc(){
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+/* esc() กัน HTML injection ได้ แต่ไม่กัน scheme อันตรายใน href
+   (`javascript:alert(1)` ไม่มีอักขระที่ต้อง escape เลย → หลุดเข้า href ได้)
+   อนุญาตเฉพาะ relative path หรือ http/https เท่านั้น */
+function safeUrl(u){
+  const s = String(u == null ? '' : u).trim();
+  if(!s) return '#';
+  if(/^(https?:)?\/\//i.test(s)) return s;   // //host หรือ https://host
+  if(/^[./#?]/.test(s)) return s;            // ./x  /x  #x  ?x — relative ปลอดภัย
+  return '#';                                 // javascript: data: vbscript: ฯลฯ ตัดทิ้ง
+}
 
 function relTH(v){
   if(!v) return 'ยังไม่เคยอัปเดต';
@@ -448,20 +452,37 @@ function setChrome(signedIn){
 
 /* ── boot wiring ───────────────────────────────────────────── */
 
-window.addEventListener('fb-ready', (e) => {
+let readyDone = false;   // กัน onReady ทำงานซ้ำจาก event + polling พร้อมกัน
+
+function onReady(user){
+  if(readyDone) return;
+  const api = window.__FB;
+  if(!api) return;         // ยังไม่พร้อมจริง — อย่าเพิ่งตั้ง flag ใด ๆ
+  readyDone = true;
   settled = true;
-  FB = window.__FB;
-  uid = (e.detail.user && e.detail.user.uid) || (FB.user && FB.user.uid) || null;
+  FB = api;
+  uid = (user && user.uid) || (FB.user && FB.user.uid) || null;
   try { FB.assertVer(BOOT_REQ); }
   catch(err){ toast(err.message, 'error'); }
   $('c-boot').textContent = 'fb-boot ' + (window.__FB_BOOT_VER || '?');
-  $('c-user').textContent = (e.detail.user && e.detail.user.email) || '';
+  $('c-user').textContent = (user && user.email) || (FB.user && FB.user.email) || '';
   if(!uid){ return screen('อ่าน uid ไม่ได้', ['login สำเร็จแต่ไม่มี uid — ลอง sign out แล้วเข้าใหม่'], [
     { label:'Sign out', on: () => window.FB_SIGN_OUT && window.FB_SIGN_OUT() }
   ]); }
   setChrome(true);
   load();
-});
+}
+
+window.addEventListener('fb-ready', (e) => onReady(e.detail && e.detail.user));
+
+/* กันพลาด event: ถ้า fb-boot ยิง 'fb-ready' ไปแล้วก่อน listener ข้างบนจะติด
+   (module สองก้อนโหลดคนละจังหวะ) portal จะค้างจนหมด timeout แล้วขึ้น error ผิด ๆ
+   → เช็คสถานะปัจจุบันซ้ำอีกทาง แทนที่จะรอ event อย่างเดียว */
+if(window.__FB) {
+  onReady(window.__FB.user);
+} else if(window.__fbReady && typeof window.__fbReady.then === 'function') {
+  window.__fbReady.then((api) => onReady(api && api.user)).catch(() => {});
+}
 
 window.addEventListener('fb-auth-required', (e) => {
   settled = true;
@@ -477,7 +498,9 @@ window.addEventListener('fb-auth-required', (e) => {
 
 window.addEventListener('fb-signed-out', () => {
   settled = true;
-  FB = null; setChrome(false);
+  readyDone = false;      // ให้ login รอบถัดไป onReady ทำงานได้อีก
+  FB = null; uid = null; plugins = [];
+  setChrome(false);
   $('c-user').textContent = '';
   screen('ออกจากระบบแล้ว', ['session ถูกล้างแล้ว · sign in ใหม่เพื่อเปิดคลังอีกครั้ง'], [
     { label:'Sign in with Google', primary:true, on: () => window.FB_SIGN_IN && window.FB_SIGN_IN() }
@@ -539,7 +562,7 @@ async function load(){
   } catch(err){
     setChrome(true);
     return screen('อ่าน registry ไม่ได้', [
-      'ที่ <code>apps/_registry</code> — สาเหตุที่เจอบ่อยคือ Firestore Rules ยังไม่ publish หรือ email ไม่ตรง',
+      'ที่ <code>users/&lt;uid&gt;/apps/_registry</code> — สาเหตุที่เจอบ่อยคือ Firestore Rules ยังไม่ publish',
       '<code>' + esc(err.message || String(err)) + '</code>'
     ], [{ label:'Retry', primary:true, on: load }]);
   }
@@ -547,7 +570,7 @@ async function load(){
   if(!rows.length){
     setChrome(true);
     return screen('คลังยังว่าง', [
-      '<code>apps/_registry</code> ยังไม่มี plugin — seed row แรกเพื่อเริ่มใช้งาน',
+      '<code>users/&lt;uid&gt;/apps/_registry</code> ยังไม่มี plugin — seed row แรกเพื่อเริ่มใช้งาน',
       'หรือกด Registry เพื่อกรอกเอง'
     ], [
       { label:'Seed papyrus row', primary:true, on: seedPapyrus },
@@ -583,8 +606,7 @@ function render(){
   mount.style.gridTemplateColumns = '';
   const withCard = plugins.filter(p => p._card).length;
   $('stat').innerHTML =
-    '<b>' + plugins.length + '</b> plugins · <b>' + withCard + '</b> มีข้อมูล · ' +
-    'อ่าน ' + (1 + plugins.length) + ' docs/เปิดหน้า';
+    '<b>' + plugins.length + '</b> plugins · <b>' + withCard + '</b> มีข้อมูล';
 
   mount.innerHTML = plugins.map(tile).join('');
 }
@@ -592,7 +614,8 @@ function render(){
 function tile(p){
   const c = p._card || null;
   const f = freshness(c, p._err);
-  const url = p.url || '#';
+  const url = safeUrl(p.url);
+  const badUrl = p.url && url === '#';
   const title = (c && c.title) || p.title || p.name || '—';
   const sigil = String(p.name || '?').toUpperCase();
   const status = p._err ? 'error' : (c && c.status) || '';
@@ -600,6 +623,8 @@ function tile(p){
   let meta;
   if(p._err){
     meta = '<span>อ่าน card ไม่ได้ · ' + esc(p._err) + '</span>';
+  } else if(badUrl){
+    meta = '<span>url ไม่ปลอดภัย ถูกตัดทิ้ง — ใช้ได้เฉพาะ /path หรือ https://</span>';
   } else if(!c){
     meta = '<span>ยังไม่มี card — plugin ยังไม่เคยเขียนข้อมูล</span>';
   } else {
@@ -633,8 +658,8 @@ function openRegistry(){
 function drawRegistry(){
   regMount.innerHTML =
     '<section class="reg"><h2>REGISTRY</h2>' +
-    '<p class="hint">socket list ที่ <code>apps/_registry</code> — เพิ่ม 1 row = เห็น tile ใหม่ ไม่ต้องแก้โค้ด portal · ' +
-    '<code>name</code> ต้องตรงกับ namespace <code>apps/&lt;name&gt;/</code> ของ plugin</p>' +
+    '<p class="hint">socket list ที่ <code>users/&lt;uid&gt;/apps/_registry</code> — เพิ่ม 1 row = เห็น tile ใหม่ ไม่ต้องแก้โค้ด portal · ' +
+    '<code>name</code> ต้องตรงกับ namespace <code>apps/&lt;name&gt;/</code> ของ plugin · <code>url</code> ต้องเป็น /path หรือ https://</p>' +
     '<div id="reg-rows"></div>' +
     '<div class="acts">' +
       '<button id="reg-add">Add row</button>' +
