@@ -19,7 +19,16 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400&display=swap" rel="stylesheet">
+
+<!-- ฆ่า request waterfall: ถ้าไม่ preload เบราว์เซอร์ต้องรอโหลด fb-boot.js เสร็จก่อน
+     ถึงจะ "เห็น" ว่ามันต้อง import firebase SDK อีก 3 ก้อน = เสียเวลาไป 1 รอบเต็ม ๆ
+     ⚠️ เวอร์ชัน SDK ตรงนี้ต้องตรงกับใน fb-boot.js — มี runtime check เตือนใน console ให้แล้ว -->
+<link rel="modulepreload" href="./fb-boot.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js">
 <style>
 /* ─────────────────────────────────────────────────────────────
    Athenaeum — design tokens
@@ -334,9 +343,11 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
 })();
 </script>
 
-<!-- 🔑 canonical fb-boot (§1.4) — subfolder layout: repo = Athenaeum-Archive
-     ถ้าเปลี่ยนชื่อ repo อีก ต้องแก้บรรทัดนี้ให้ตรงเสมอ -->
-<script type="module" src="/Athenaeum-Archive/fb-boot.js"
+<!-- 🔑 canonical fb-boot (§1.4)
+     ใช้ relative path โดยเจตนา — fb-boot.js อยู่โฟลเดอร์เดียวกับไฟล์นี้เสมอ
+     จึงไม่ผูกกับชื่อ repo → เปลี่ยนชื่อ repo กี่รอบก็ไม่พัง
+     (plugin ที่อยู่คนละ repo ยังต้องใช้ absolute: /<repo-portal>/fb-boot.js) -->
+<script type="module" src="./fb-boot.js"
         onerror="window.dispatchEvent(new CustomEvent('fb-boot-missing'))"></script>
 
 <script type="module">
@@ -348,6 +359,7 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
 
 const APP_VER  = '2026.07.28.A';   // multi-user (users/<uid>/apps/) + safeUrl + boot-race recovery
 const BOOT_REQ = '2026.07.27.C';   // fb-boot version ที่ portal นี้คาด
+const SDK_PRELOAD = '10.12.2';     // ต้องตรงกับเวอร์ชันใน <link rel="modulepreload"> ข้างบน
 const BOOT_TIMEOUT_MS = 9000;
 
 const $ = (id) => document.getElementById(id);
@@ -464,6 +476,12 @@ function onReady(user){
   uid = (user && user.uid) || (FB.user && FB.user.uid) || null;
   try { FB.assertVer(BOOT_REQ); }
   catch(err){ toast(err.message, 'error'); }
+  // preload ใน <head> ฮาร์ดโค้ดเวอร์ชัน SDK ไว้ — ถ้า fb-boot.js อัปเวอร์ชันแล้วลืมแก้ที่นี่
+  // เบราว์เซอร์จะดาวน์โหลด SDK ทิ้งเปล่า ๆ 1 ชุดโดยไม่มีอะไรพัง (เงียบ) → เตือนไว้ใน console
+  if(FB.SDK_VER && FB.SDK_VER !== SDK_PRELOAD){
+    console.warn('[athenaeum] modulepreload SDK ' + SDK_PRELOAD +
+                 ' ไม่ตรงกับที่ fb-boot.js ใช้จริง (' + FB.SDK_VER + ') — แก้ <link rel="modulepreload"> ใน index.html');
+  }
   $('c-boot').textContent = 'fb-boot ' + (window.__FB_BOOT_VER || '?');
   $('c-user').textContent = (user && user.email) || (FB.user && FB.user.email) || '';
   if(!uid){ return screen('อ่าน uid ไม่ได้', ['login สำเร็จแต่ไม่มี uid — ลอง sign out แล้วเข้าใหม่'], [
