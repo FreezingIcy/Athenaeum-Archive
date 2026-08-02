@@ -357,7 +357,7 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
    ห้ามอ่าน data ของ plugin เด็ดขาด — อ่านได้แค่ users/<uid>/apps/<name>/meta/card
    ═══════════════════════════════════════════════════════════════ */
 
-const APP_VER  = '2026.07.28.A';   // multi-user (users/<uid>/apps/) + safeUrl + boot-race recovery
+const APP_VER  = '2026.07.31.A';   // tile: โชว์ path จริงตอนไม่มี card (ช่วยจับ name สะกดไม่ตรง)
 const BOOT_REQ = '2026.07.27.C';   // fb-boot version ที่ portal นี้คาด
 const SDK_PRELOAD = '10.12.2';     // ต้องตรงกับเวอร์ชันใน <link rel="modulepreload"> ข้างบน
 const BOOT_TIMEOUT_MS = 9000;
@@ -644,7 +644,11 @@ function tile(p){
   } else if(badUrl){
     meta = '<span>url ไม่ปลอดภัย ถูกตัดทิ้ง — ใช้ได้เฉพาะ /path หรือ https://</span>';
   } else if(!c){
-    meta = '<span>ยังไม่มี card — plugin ยังไม่เคยเขียนข้อมูล</span>';
+    // แยกไม่ออกจริงๆ ว่า "ยังไม่เคยใช้" กับ "name สะกดไม่ตรงกับที่ plugin เขียนจริง" (path ไม่มีอยู่แล้วทั้งคู่)
+    // โชว์ path ตรงๆ ให้เทียบเองได้ ดีกว่าเดาแทนแล้วอาจผิด
+    const pathShown = 'users/' + esc(uid || '<uid>') + '/apps/' + esc(p.name || '?') + '/meta/card';
+    meta = '<span>ไม่พบ <code>' + pathShown + '</code> — ถ้าเพิ่งเชื่อมยังไม่มีข้อมูลก็ปกติ ' +
+           'ถ้าใช้งานแล้วลองเช็คว่า <code>name</code> สะกดตรงกับที่ plugin เขียนจริงไหม (ตัวเล็ก/ใหญ่มีผล)</span>';
   } else {
     const n = (typeof c.count === 'number') ? c.count : '—';
     meta = '<span class="n">' + esc(n) + '</span><span>รายการ</span>' +
