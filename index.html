@@ -303,6 +303,7 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
   <span id="mode-badge"></span>
   <button id="btn-refresh" hidden>Refresh</button>
   <button id="btn-registry" hidden>Registry</button>
+  <button id="btn-backup" hidden>Backup</button>
   <button id="btn-signout" hidden>Sign out</button>
 </div>
 
@@ -357,7 +358,7 @@ button.danger:hover{color:var(--rust);border-color:var(--rust)}
    ห้ามอ่าน data ของ plugin เด็ดขาด — อ่านได้แค่ users/<uid>/apps/<name>/meta/card
    ═══════════════════════════════════════════════════════════════ */
 
-const APP_VER  = '2026.07.31.A';   // tile: โชว์ path จริงตอนไม่มี card (ช่วยจับ name สะกดไม่ตรง)
+const APP_VER  = '2026.08.01.A';   // master backup (zip รวมทุก plugin ตาม manifest)
 const BOOT_REQ = '2026.07.27.C';   // fb-boot version ที่ portal นี้คาด
 const SDK_PRELOAD = '10.12.2';     // ต้องตรงกับเวอร์ชันใน <link rel="modulepreload"> ข้างบน
 const BOOT_TIMEOUT_MS = 9000;
@@ -380,6 +381,11 @@ $('c-app').textContent = 'portal ' + APP_VER;
 function appDoc(){
   if(!uid) throw new Error('appDoc ถูกเรียกก่อน login (uid ยังว่าง)');
   return FB.doc(FB.db, 'users', uid, 'apps', ...arguments);
+}
+// คู่กับ appDoc — ใช้ตอน backup ที่ต้องดูดทั้ง collection ตามที่ manifest ประกาศ
+function appCol(){
+  if(!uid) throw new Error('appCol ถูกเรียกก่อน login (uid ยังว่าง)');
+  return FB.collection(FB.db, 'users', uid, 'apps', ...arguments);
 }
 
 /* ── utils ─────────────────────────────────────────────────── */
@@ -459,6 +465,7 @@ function screen(title, lines, actions){
 function setChrome(signedIn){
   $('btn-refresh').hidden  = !signedIn;
   $('btn-registry').hidden = !signedIn;
+  $('btn-backup').hidden   = !signedIn;
   $('btn-signout').hidden  = !signedIn || demo;
 }
 
@@ -761,6 +768,186 @@ async function saveRegistry(){
 $('btn-refresh').onclick  = () => { if(demo){ render(); toast('demo mode', 'info'); } else load(); };
 $('btn-registry').onclick = () => { regRows ? closeRegistry() : openRegistry(); };
 $('btn-signout').onclick  = () => { if(window.FB_SIGN_OUT) window.FB_SIGN_OUT(); };
+
+/* ═══════════════════════════════════════════════════════════════
+   MASTER BACKUP — ดูดข้อมูลทุก plugin เป็น zip ไฟล์เดียว
+   ───────────────────────────────────────────────────────────────
+   หลักการ: portal ไม่รู้จัก schema ของ plugin ใด ๆ เลย
+   มันอ่าน meta/manifest ที่ plugin ประกาศไว้ (contract §6) แล้วดูดตามนั้น
+   มองข้อมูลเป็นก้อน JSON ทึบ ไม่ตีความ → เพิ่ม plugin ใหม่ไม่ต้องแก้โค้ดตรงนี้
+
+   ⚠️ export อย่างเดียว — ไม่มี central import โดยเจตนา (contract §8)
+      เพราะเขียนข้อมูลต้องรู้ schema และพังทีเดียวกระทบทุก plugin
+      portal เป็น "ผู้แกะ zip แล้วส่งต่อ" ให้ผู้ใช้ไป import ที่ plugin เอง
+   ═══════════════════════════════════════════════════════════════ */
+
+const JSZIP_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+let jszipLoading = null;
+
+// โหลดตอนกดปุ่มเท่านั้น — ไม่แตะ critical path ของการเปิดหน้าปกติ
+function loadJSZip(){
+  if(window.JSZip) return Promise.resolve(window.JSZip);
+  if(jszipLoading) return jszipLoading;
+  jszipLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = JSZIP_CDN;
+    s.onload = () => window.JSZip ? resolve(window.JSZip) : reject(new Error('JSZip โหลดแล้วแต่ไม่พบ object'));
+    s.onerror = () => reject(new Error('โหลด JSZip ไม่ได้ — เช็คการเชื่อมต่อเน็ต'));
+    document.head.appendChild(s);
+  });
+  return jszipLoading;
+}
+
+// อ่านค่าตาม path แบบจุด เช่น "meta.generated" — manifest ประกาศ dateField แบบนี้ได้
+function digField(obj, path){
+  if(!obj || !path) return undefined;
+  return String(path).split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+}
+
+function inBackupRange(rec, dateField, from, to){
+  if(!from && !to) return true;
+  const raw = digField(rec, dateField);
+  const t = Date.parse(raw);
+  if(isNaN(t)) return true;          // ไม่มีวันที่/อ่านไม่ได้ → เก็บไว้ ดีกว่าทิ้งเงียบ ๆ
+  if(from && t <  Date.parse(from)) return false;
+  if(to   && t >= Date.parse(to))   return false;
+  return true;
+}
+
+function backupRange(preset){
+  const d = new Date(), Y = d.getFullYear(), M = d.getMonth();
+  const iso = (x) => x.toISOString();
+  switch(preset){
+    case 'ytd': return { from: iso(new Date(Date.UTC(Y,0,1))), to: null, label: 'ปี ' + Y };
+    case 'q': { const q = Math.floor(M/3);
+      return { from: iso(new Date(Date.UTC(Y,q*3,1))), to: iso(new Date(Date.UTC(Y,q*3+3,1))), label: 'Q'+(q+1)+' '+Y }; }
+    case 'm': return { from: iso(new Date(Date.UTC(Y,M,1))), to: iso(new Date(Date.UTC(Y,M+1,1))),
+                       label: Y+'-'+String(M+1).padStart(2,'0') };
+    default:  return { from: null, to: null, label: 'ทั้งหมด' };
+  }
+}
+
+// ดูด plugin 1 ตัวตาม manifest ที่มันประกาศ · คืน { files, stats } หรือ { skipped } ถ้าไม่มี manifest
+async function harvestPlugin(p, range, onProgress){
+  const name = p.name;
+  let mf = null;
+  try {
+    const s = await FB.getDoc(appDoc(name, 'meta', 'manifest'));
+    if(s.exists()) mf = s.data();
+  } catch(e){ return { name, skipped: 'อ่าน manifest ไม่ได้: ' + (e.message || e) }; }
+  if(!mf) return { name, skipped: 'ยังไม่มี meta/manifest (plugin ยังไม่ประกาศโครงสร้าง)' };
+
+  const files = {};
+  files[name + '/_manifest.json'] = JSON.stringify(mf, null, 2);
+  const stats = { docs: 0, records: 0, collections: {} };
+
+  // 1) document เดี่ยว ๆ ที่ประกาศไว้ เช่น "meta/index"
+  for(const rel of (mf.docs || [])){
+    const seg = String(rel).split('/').filter(Boolean);
+    if(seg.length !== 2) continue;                   // Firestore ต้อง col/doc สลับกัน
+    try {
+      const s = await FB.getDoc(appDoc(name, seg[0], seg[1]));
+      if(s.exists()){ files[name + '/' + rel + '.json'] = JSON.stringify(s.data(), null, 2); stats.docs++; }
+    } catch(e){ console.warn('[backup] doc', name, rel, e); }
+  }
+
+  // 2) collection ทั้งก้อน + กรองช่วงวันที่ตาม dateField ที่ประกาศ
+  for(const col of (mf.collections || [])){
+    const cname = col && col.name; if(!cname) continue;
+    let n = 0, skippedByRange = 0;
+    try {
+      const qs = await FB.getDocs(appCol(name, cname));
+      const ids = []; qs.forEach(d => ids.push({ id: d.id, data: d.data() }));
+      for(const rec of ids){
+        if(!inBackupRange(rec.data, col.dateField, range.from, range.to)){ skippedByRange++; continue; }
+        files[name + '/' + cname + '/' + rec.id + '.json'] = JSON.stringify(rec.data, null, 2);
+        n++;
+      }
+    } catch(e){ console.warn('[backup] collection', name, cname, e); }
+    stats.collections[cname] = n;
+    if(skippedByRange) stats.collections[cname + ' (นอกช่วง)'] = skippedByRange;
+    stats.records += n;
+    if(onProgress) onProgress(name + '/' + cname + ' — ' + n + ' รายการ');
+  }
+  return { name, files, stats, manifest: mf };
+}
+
+async function runBackup(preset){
+  if(demo) return toast('demo mode — ไม่ได้ต่อ Firestore จริง', 'info');
+  if(!plugins.length) return toast('ยังไม่มี plugin ใน registry', 'error');
+
+  const btn = $('btn-backup');
+  const range = backupRange(preset);
+  btn.disabled = true;
+  const restore = () => { btn.disabled = false; btn.textContent = 'Backup'; };
+
+  try {
+    btn.textContent = 'โหลด zip…';
+    const JSZip = await loadJSZip();
+    const zip = new JSZip();
+    const summary = [], skipped = [];
+
+    for(const p of plugins){
+      if(!p.name) continue;
+      btn.textContent = 'ดูด ' + p.name + '…';
+      const r = await harvestPlugin(p, range, (m) => { btn.textContent = m; });
+      if(r.skipped){ skipped.push({ name: r.name, why: r.skipped }); continue; }
+      Object.entries(r.files).forEach(([path, body]) => zip.file(path, body));
+      summary.push({ name: r.name, docs: r.stats.docs, records: r.stats.records,
+                     collections: r.stats.collections, app_ver: r.manifest.app_ver || null });
+    }
+
+    if(!summary.length){
+      restore();
+      return screen('backup ไม่ได้ข้อมูลเลย', [
+        'ไม่มี plugin ตัวไหนประกาศ <code>meta/manifest</code>',
+        'plugin ต้องเขียน manifest ตอน login (Athenaeum contract §6) portal ถึงจะรู้ว่าต้องดูดอะไร',
+        ...skipped.map(s => '<code>' + esc(s.name) + '</code> — ' + esc(s.why))
+      ], [{ label: 'กลับ', primary: true, on: render }]);
+    }
+
+    // manifest ของ backup เอง — เปิดไฟล์แล้วรู้ทันทีว่ามีอะไรอยู่ข้างใน (P-10: ไฟล์บอกตัวเองได้)
+    zip.file('manifest.json', JSON.stringify({
+      bundle: 'athenaeum.backup', exported: new Date().toISOString(),
+      portal_ver: APP_VER, contract_ver: '3',
+      range: { preset, from: range.from, to: range.to, label: range.label },
+      plugins: summary, skipped
+    }, null, 2));
+
+    btn.textContent = 'บีบอัด…';
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    const stamp = new Date().toISOString().slice(0,16).replace(/[:T-]/g,'');
+    const tag = preset === 'all' ? '' : '.' + preset;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'athenaeum-backup' + tag + '.' + stamp + '.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+
+    const total = summary.reduce((s,x) => s + x.records, 0);
+    toast('backup ' + range.label + ' — ' + summary.length + ' plugin · ' + total + ' รายการ' +
+          (skipped.length ? ' · ข้าม ' + skipped.length : ''), 'ok');
+  } catch(err){
+    console.error('[backup]', err);
+    toast('backup ไม่สำเร็จ · ' + (err.message || err), 'error');
+  }
+  restore();
+}
+
+// ถามช่วงเวลาก่อน — ระบบเดียว {from,to} · preset เป็นแค่ปุ่ม (P-12 เหมือนที่ Papyrus ใช้)
+$('btn-backup').onclick = () => {
+  screen('Backup ทุก plugin เป็น zip', [
+    'portal อ่าน <code>meta/manifest</code> ของแต่ละ plugin แล้วดูดตามที่ประกาศ — ไม่ตีความข้อมูล',
+    'ไฟล์จะแยก folder ตาม plugin · โครงตรงกับ path ใน Firestore 1:1',
+    '<b>เลือกช่วงเวลา</b> (มีผลเฉพาะ collection ที่ประกาศ <code>dateField</code> ไว้)'
+  ], [
+    { label: 'ทั้งหมด', primary: true, on: () => runBackup('all') },
+    { label: 'ปีนี้',    on: () => runBackup('ytd') },
+    { label: 'ไตรมาสนี้', on: () => runBackup('q') },
+    { label: 'เดือนนี้',  on: () => runBackup('m') },
+    { label: 'ยกเลิก',   on: render }
+  ]);
+};
 </script>
 </body>
 </html>
